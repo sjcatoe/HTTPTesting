@@ -1,0 +1,201 @@
+using System;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+
+namespace CarValueFunction
+{
+    public class CarValueResult
+    {
+        public double Value { get; set; }
+    }
+
+    public static class CarValueFunction
+    {
+        private static readonly HttpClient httpClient = new HttpClient();
+        private static readonly string apiKey = "YOUR_API_KEY";
+
+        public static async Task<double> GetCarValueAsync(int year, string make, string model)
+        {
+            var request = new
+            {
+                prompt = $"What is the value of a {year} {make} {model}?",
+                max_tokens = 1024,
+                n = 1,
+                stop = null,
+                temperature = 0.5
+            };
+
+            var requestJson = JsonConvert.SerializeObject(request);
+            var response = await httpClient.PostAsync("https://api.openai.com/v1/engines/text-davinci-002/completions",
+                new StringContent(requestJson, Encoding.UTF8, "application/json")).ConfigureAwait(false);
+
+            response.EnsureSuccessStatusCode();
+
+            var responseJson = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            var responseObject = JsonConvert.DeserializeObject<dynamic>(responseJson);
+
+            var valueString = responseObject.choices[0].text.Value;
+            if (double.TryParse(valueString, out double value))
+            {
+                return value;
+            }
+
+            throw new Exception("Could not parse car value from API response.");
+        }
+    }
+}
+
+
+
+
+
+
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.WebJobs;
+using Microsoft.Azure.WebJobs.Extensions.Http;
+using Microsoft.AspNetCore.Http;
+
+namespace CarValueFunction
+{
+    public static class CarValueTrigger
+    {
+        [FunctionName("CarValue")]
+        public static async Task<IActionResult> Run(
+            [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req)
+        {
+            string yearString = req.Query["year"];
+            string make = req.Query["make"];
+            string model = req.Query["model"];
+
+            if (string.IsNullOrEmpty(yearString) || string.IsNullOrEmpty(make) || string.IsNullOrEmpty(model))
+            {
+                return new BadRequestObjectResult("Please provide the year, make, and model of the car.");
+            }
+
+            if (!int.TryParse(yearString, out int year))
+            {
+                return new BadRequestObjectResult("Please provide a valid year.");
+            }
+
+            var value = await CarValueFunction.GetCarValueAsync(year, make, model).ConfigureAwait(false);
+
+            return new OkObjectResult(value);
+        }
+    }
+}
+
+
+
+using System.Net;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.WebJobs;
+using Microsoft.Azure.WebJobs.Extensions.Http;
+using Microsoft.AspNetCore.Http;
+
+namespace AzureFunctionExample
+{
+    public static class HttpTriggerFunction
+    {
+        [FunctionName("HttpTriggerFunction")]
+        public static IActionResult Run(
+            [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req)
+        {
+            string html = "<html><body><h1>Hello, Azure Functions!</h1></body></html>";
+            return new ContentResult
+            {
+                Content = html,
+                ContentType = "text/html",
+                StatusCode = (int)HttpStatusCode.OK
+            };
+        }
+    }
+}
+
+
+
+using System.IO;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.WebJobs;
+using Microsoft.Azure.WebJobs.Extensions.Http;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+
+namespace YourNamespace
+{
+    public static class YourFunctionName
+    {
+        [FunctionName("YourFunctionName")]
+        public static IActionResult Run(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = null)] HttpRequest req,
+            ILogger log)
+        {
+            string html = "<html><body>" +
+                "<form action='/api/YourFunctionName' method='post'>" +
+                "Name: <input type='text' name='name'>" +
+                "<br>" +
+                "Car: <input type='text' name='car'>" +
+                "<br>" +
+                "<input type='submit' value='Submit'>" +
+                "</form>" +
+                "</body></html>";
+
+            return new ContentResult { Content = html, ContentType = "text/html" };
+        }
+    }
+}
+
+
+
+
+using System.IO;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.WebJobs;
+using Microsoft.Azure.WebJobs.Extensions.Http;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+
+namespace YourNamespace
+{
+    public static class YourFunctionName
+    {
+        [FunctionName("YourFunctionName")]
+        public static IActionResult Run(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req,
+            ILogger log)
+        {
+            string name = req.Query["name"];
+            string car = req.Query["car"];
+
+            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(car))
+            {
+                string html = "<html><body>" +
+                    "<form action='/api/YourFunctionName' method='post'>" +
+                    "Name: <input type='text' name='name'>" +
+                    "<br>" +
+                    "Car: <input type='text' name='car'>" +
+                    "<br>" +
+                    "<input type='submit' value='Submit'>" +
+                    "</form>" +
+                    "</body></html>";
+
+                return new ContentResult { Content = html, ContentType = "text/html" };
+            }
+            else
+            {
+                string value = "Get value from OpenAI API"; // replace this with your actual code to call OpenAI's API
+
+                string html = "<html><body>" +
+                    "<p>The value of the " + car + " is " + value + "</p>" +
+                    "<form action='/api/YourFunctionName' method='get'>" +
+                    "<input type='submit' value='Back'>" +
+                    "</form>" +
+                    "</body></html>";
+
+                return new ContentResult { Content = html, ContentType = "text/html" };
+            }
+        }
+    }
+}
